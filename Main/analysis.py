@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import statsmodels.api as sm
 
 
 def evaluate_model_performance(y_test, predictions):
@@ -64,6 +65,40 @@ def analyze_precision(X_test, y_test, predictions):
     plt.ylabel('MAE')
     plt.xticks(rotation=45)
     plt.tight_layout()
+    plt.show()
 
-    # Show the plot
+    # Distribution plot
+    plt.figure(figsize=(12, 6))
+    sns.kdeplot(y_test, label='Actual Values', color='blue', shade=True)
+    sns.kdeplot(predictions, label='Predicted Values', color='red', shade=True)
+    plt.title('Distribution of Actual vs. Predicted Values')
+    plt.xlabel('Values')
+    plt.ylabel('Density')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Prediction vs. Actual Scatter Plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(y_test, predictions)
+    plt.title('Prediction vs. Actual Scatter Plot')
+    plt.xlabel('Actual Values')
+    plt.ylabel('Predicted Values')
+    plt.grid(True)
+    plt.show()
+
+    # Residuals vs. Fitted Values Plot
+    residuals = y_test - predictions
+    plt.figure(figsize=(8, 6))
+    plt.scatter(predictions, residuals)
+    plt.axhline(y=0, color='red', linestyle='--')
+    plt.title('Residuals vs. Fitted Values Plot')
+    plt.xlabel('Predicted Values')
+    plt.ylabel('Residuals')
+    plt.grid(True)
+    plt.show()
+
+    # QQ Plot
+    sm.qqplot(residuals, line='s')
+    plt.title('QQ Plot of Residuals')
     plt.show()
