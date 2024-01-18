@@ -33,11 +33,10 @@ def evaluate_model_performance(y_test, predictions):
 
 def analyze_precision(X_test, y_test, predictions):
     # Create a DataFrame to store the results
-    results = pd.DataFrame({'Actual': y_test, 'Predicted': predictions})
+    results = pd.DataFrame({'Actual': y_test, 'Predicted': predictions.flatten()})
 
     # Calculate the absolute error
-    results['Absolute Error'] = np.abs(
-        results['Actual'] - results['Predicted'])
+    results['Absolute Error'] = np.abs(results['Actual'] - results['Predicted'])
 
     # Define price ranges
     price_ranges = np.arange(50000, 800001, 50000)
