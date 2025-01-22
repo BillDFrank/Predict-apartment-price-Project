@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import statsmodels.api as sm
 
 
 def evaluate_model_performance(y_test, predictions):
@@ -25,10 +24,6 @@ def evaluate_model_performance(y_test, predictions):
         'RMSE': rmse,
         'R2': r2
     }
-
-# Example usage:
-# performance_metrics = evaluate_model_performance(y_test, predictions)
-# print(performance_metrics)
 
 
 def analyze_precision(X_test, y_test, predictions):
