@@ -45,19 +45,20 @@ def connect_to_database():
         return None
 
 
-def get_last_scraped_page(conn):
+def get_last_scraped_page_today(conn, today_str):
     """
-    Retrieve the last successfully scraped page from the advertisings table.
+    Retrieve the last scraped page for today's date from the advertisings table.
 
     Args:
         conn (pyodbc.Connection): The database connection object.
+        today_str (str): Today's date as a string (e.g., "2025-02-02").
 
     Returns:
-        int: The last scraped page number or 0 if no records exist.
+        int: The last scraped page number for today, or 0 if no records exist.
     """
-    query = "SELECT MAX(page) FROM advertisings;"
+    query = "SELECT MAX(page) FROM advertisings WHERE date_scraped = ?;"
     cursor = conn.cursor()
-    cursor.execute(query)
+    cursor.execute(query, today_str)
     result = cursor.fetchone()[0]
     return result if result is not None else 0
 
