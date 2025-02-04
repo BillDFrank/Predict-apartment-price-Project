@@ -154,6 +154,5 @@ def update_details_in_db(conn, record_id, bathrooms, construction_year, energeti
             WHERE id = ?
         """, b_val, cy_val, ec_val, record_id)
         conn.commit()
-        print(f"✅ Record {record_id} updated.")
     except Exception as e:
         print(f"❌ Error updating record {record_id}: {e}")
