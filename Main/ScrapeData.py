@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -134,13 +136,13 @@ def scrape_listings(num_pages=1, force_start_page=None):
 def scrape_details(order_by="bottom"):
     """
     Scrapes missing details (bathrooms, construction_year, energetic_certificate) from ads.
-    
+
     Parameters:
         order_by (str): "top" to start from the first record, "bottom" to start from the last.
     """
     ua = UserAgent()
     session = requests.Session()
-    
+
     conn = connect_to_database()
     if conn is None:
         print("❌ Database connection failed. Exiting.")
@@ -148,27 +150,30 @@ def scrape_details(order_by="bottom"):
 
     # Determine order for fetching records
     order_clause = "ASC" if order_by == "top" else "DESC"
-    
+
     # Select records that need detail extraction
     query = f"""
         SELECT id, url FROM advertisings 
         WHERE bathrooms IS NULL AND construction_year IS NULL AND energetic_certificate IS NULL
         ORDER BY id {order_clause}
     """
-    
+
     cursor = conn.cursor()
     cursor.execute(query)
     records = cursor.fetchall()
 
-    print(f"🟢 Found {len(records)} records needing detail extraction. (Order: {order_by})")
+    print(
+        f"🟢 Found {len(records)} records needing detail extraction. (Order: {order_by})")
 
     for rec in records:
         record_id, ad_url = rec[0], rec[1]
-        
+
         try:
-            response = session.get(ad_url, headers={'User-Agent': ua.random}, timeout=10)
+            response = session.get(
+                ad_url, headers={'User-Agent': ua.random}, timeout=10)
             if response.status_code != 200:
-                print(f"⚠️ Failed to retrieve details for record {record_id}. Status code: {response.status_code}")
+                print(
+                    f"⚠️ Failed to retrieve details for record {record_id}. Status code: {response.status_code}")
                 continue
 
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -176,7 +181,8 @@ def scrape_details(order_by="bottom"):
             # --- Extract Bathrooms ---
             try:
                 buttons = soup.find_all('button', class_='eezlw8k1 css-ds0a69')
-                bathrooms = buttons[2].find('div', class_='css-1ftqasz').get_text(strip=True) if len(buttons) >= 3 else "N/A"
+                bathrooms = buttons[2].find(
+                    'div', class_='css-1ftqasz').get_text(strip=True) if len(buttons) >= 3 else "N/A"
             except Exception:
                 bathrooms = "N/A"
 
@@ -187,23 +193,28 @@ def scrape_details(order_by="bottom"):
 
                 divs = soup.find_all('div', class_='css-t7cajz e16p81cp1')
                 for div in divs:
-                    p_elements = div.find_all('p', class_='e16p81cp2 css-nlohq6')
+                    p_elements = div.find_all(
+                        'p', class_='e16p81cp2 css-nlohq6')
                     for i in range(len(p_elements) - 1):
                         text = p_elements[i].get_text(strip=True)
                         if "Ano de construção" in text:
-                            construction_year = p_elements[i + 1].get_text(strip=True)
+                            construction_year = p_elements[i +
+                                                           1].get_text(strip=True)
                         elif "Certificado energético" in text:
-                            energetic_certificate = p_elements[i + 1].get_text(strip=True)
-                    
+                            energetic_certificate = p_elements[i +
+                                                               1].get_text(strip=True)
+
                     # Stop searching if both values are found
                     if construction_year != "N/A" and energetic_certificate != "N/A":
                         break
             except Exception:
                 pass  # Keep default "N/A" if an error occurs
 
-            update_details_in_db(conn, record_id, bathrooms, construction_year, energetic_certificate)
-            print(f"✅ Updated record {record_id}: Bathrooms={bathrooms}, Year={construction_year}, Cert={energetic_certificate}")
-            
+            update_details_in_db(conn, record_id, bathrooms,
+                                 construction_year, energetic_certificate)
+            print(
+                f"✅ Updated record {record_id}: Bathrooms={bathrooms}, Year={construction_year}, Cert={energetic_certificate}")
+
             time.sleep(random.uniform(0.5, 1.5))
 
         except Exception as e:

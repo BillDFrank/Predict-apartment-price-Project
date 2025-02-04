@@ -1,3 +1,6 @@
+# flake8: noqa
+
+
 import os
 import pyodbc
 import pandas as pd
@@ -156,3 +159,38 @@ def update_details_in_db(conn, record_id, bathrooms, construction_year, energeti
         conn.commit()
     except Exception as e:
         print(f"❌ Error updating record {record_id}: {e}")
+
+
+def get_data(date_str=None):
+    """
+    Retrieve data from the advertisings table. If a date is provided, filter by date_scraped.
+
+    Args:
+        date_str (str, optional): The date (format: "YYYY-MM-DD") to filter the records. Defaults to None.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the retrieved records.
+    """
+    conn = connect_to_database()
+    if conn is None:
+        print("❌ Database connection failed. Exiting.")
+        return pd.DataFrame()
+
+    query = "SELECT * FROM advertisings"
+    params = []
+
+    if date_str:
+        query += " WHERE date_scraped = ?"
+        params.append(date_str)
+
+    try:
+        df = pd.read_sql(query, conn, params=params)
+        print(
+            f"✅ Retrieved {len(df)} records{' for date ' + date_str if date_str else ''}.")
+    except Exception as e:
+        print(f"❌ Error retrieving data: {e}")
+        df = pd.DataFrame()
+    finally:
+        conn.close()
+
+    return df
