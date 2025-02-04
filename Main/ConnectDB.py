@@ -1,8 +1,5 @@
-# flake8: noqa
-
-
 import os
-import pyodbc
+import psycopg2
 import pandas as pd
 import re
 from dotenv import load_dotenv
@@ -13,35 +10,18 @@ load_dotenv()
 
 def connect_to_database():
     """
-    Establishes a connection to the Azure SQL Database using environment variables.
+    Establishes a connection to the Neon PostgreSQL Database using the provided credentials.
     Returns:
-        conn (pyodbc.Connection): The database connection object.
+        conn (psycopg2.extensions.connection): The database connection object.
     """
-    # Retrieve credentials from environment variables
-    server = os.getenv("DB_SERVER")
-    database = os.getenv("DB_NAME")
-    username = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
-    driver = "{ODBC Driver 18 for SQL Server}"
-
-    if not all([server, database, username, password]):
-        print("❌ Missing database credentials. Check environment variables.")
-        return None
-
-    conn_str = (
-        f"DRIVER={driver};"
-        f"SERVER={server};"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-        f"Encrypt=yes;"
-        f"TrustServerCertificate=no;"
-        f"Connection Timeout=30;"
-    )
-
     try:
-        conn = pyodbc.connect(conn_str)
-        print("✅ Connected to Azure SQL Database successfully!")
+        conn = psycopg2.connect(
+            host=os.getenv("PGHOST"),
+            database=os.getenv("PGDATABASE"),
+            user=os.getenv("PGUSER"),
+            password=os.getenv("PGPASSWORD")
+        )
+        print("✅ Connected to Neon PostgreSQL Database successfully!")
         return conn
     except Exception as e:
         print("❌ Failed to connect:", e)
@@ -53,15 +33,15 @@ def get_last_scraped_page_today(conn, today_str):
     Retrieve the last scraped page for today's date from the advertisings table.
 
     Args:
-        conn (pyodbc.Connection): The database connection object.
+        conn (psycopg2.extensions.connection): The database connection object.
         today_str (str): Today's date as a string (e.g., "2025-02-02").
 
     Returns:
         int: The last scraped page number for today, or 0 if no records exist.
     """
-    query = "SELECT MAX(page) FROM advertisings WHERE date_scraped = ?;"
+    query = "SELECT MAX(page) FROM advertisings WHERE date_scraped = %s;"
     cursor = conn.cursor()
-    cursor.execute(query, today_str)
+    cursor.execute(query, (today_str,))
     result = cursor.fetchone()[0]
     return result if result is not None else 0
 
@@ -83,7 +63,7 @@ def save_data_to_db(conn, df):
         cursor.execute("""
             INSERT INTO advertisings 
                 (page, url, title, price, location, rooms, area, bathrooms, construction_year, energetic_certificate, date_scraped) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
                        row['Page'],
                        row['URL'],
@@ -128,14 +108,11 @@ def update_details_in_db(conn, record_id, bathrooms, construction_year, energeti
     Update additional detail fields for a given advertising record.
 
     Args:
-        conn (pyodbc.Connection): The database connection object.
+        conn (psycopg2.extensions.connection): The database connection object.
         record_id (int): The ID of the record to update.
         bathrooms (str): The scraped bathroom information.
         construction_year (str): The scraped construction year.
         energetic_certificate (str): The scraped energetic certificate.
-
-    This function converts bathrooms and construction_year to integer values if possible.
-    For energetic_certificate, it truncates the string to a maximum length (assumed 10 characters).
     """
     # Convert bathrooms and construction_year to integers, if possible
     b_val = convert_to_int(
@@ -153,9 +130,9 @@ def update_details_in_db(conn, record_id, bathrooms, construction_year, energeti
     try:
         cursor.execute("""
             UPDATE advertisings
-            SET bathrooms = ?, construction_year = ?, energetic_certificate = ?
-            WHERE id = ?
-        """, b_val, cy_val, ec_val, record_id)
+            SET bathrooms = %s, construction_year = %s, energetic_certificate = %s
+            WHERE id = %s
+        """, (b_val, cy_val, ec_val, record_id))
         conn.commit()
     except Exception as e:
         print(f"❌ Error updating record {record_id}: {e}")
@@ -180,7 +157,7 @@ def get_data(date_str=None):
     params = []
 
     if date_str:
-        query += " WHERE date_scraped = ?"
+        query += " WHERE date_scraped = %s"
         params.append(date_str)
 
     try:
@@ -194,3 +171,47 @@ def get_data(date_str=None):
         conn.close()
 
     return df
+
+
+def send_dataframe_to_sql(df):
+    """
+    Sends the entire DataFrame to the PostgreSQL database in bulk.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the data to be inserted.
+    """
+    from sqlalchemy import create_engine
+    try:
+        # Create SQLAlchemy engine using environment variables
+        engine = create_engine(
+            f'postgresql+psycopg2://{os.getenv("PGUSER")}:{os.getenv("PGPASSWORD")}'
+            f'@{os.getenv("PGHOST")}/{os.getenv("PGDATABASE")}'
+        )
+
+        # Prepare DataFrame: Drop 'id' column and handle data types
+        df_to_insert = df.drop(columns=['id']).copy()
+
+        # Convert date_scraped to datetime
+        df_to_insert['date_scraped'] = pd.to_datetime(df_to_insert['date_scraped'])
+
+        # Convert float columns to nullable integers where appropriate
+        for col in ['bathrooms', 'construction_year']:
+            df_to_insert[col] = df_to_insert[col].astype(pd.Int64Dtype())
+
+        # Truncate energetic_certificate to 10 characters
+        df_to_insert['energetic_certificate'] = df_to_insert['energetic_certificate'].str[:10]
+
+        # Insert data
+        df_to_insert.to_sql(
+            name='advertisings',
+            con=engine,
+            if_exists='append',
+            index=False,
+            method='multi'
+        )
+        print(f"✅ Successfully inserted {len(df_to_insert)} rows into the database.")
+    except Exception as e:
+        print(f"❌ Error inserting data: {e}")
+    finally:
+        if 'engine' in locals():
+            engine.dispose()
