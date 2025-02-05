@@ -133,12 +133,13 @@ def scrape_listings(num_pages=1, force_start_page=None):
     print("🎯 Basic scraping completed!")
 
 
-def scrape_details(order_by="bottom"):
+def scrape_details(order_by="bottom", scrape_date=None):
     """
     Scrapes missing details (bathrooms, construction_year, energetic_certificate) from ads.
 
     Parameters:
         order_by (str): "top" to start from the first record, "bottom" to start from the last.
+        scrape_date (str): The specific date (YYYY-MM-DD) to filter records. If None, all dates are considered.
     """
     ua = UserAgent()
     session = requests.Session()
@@ -151,19 +152,25 @@ def scrape_details(order_by="bottom"):
     # Determine order for fetching records
     order_clause = "ASC" if order_by == "top" else "DESC"
 
-    # Select records that need detail extraction
+    # Build query with optional date filter
     query = f"""
         SELECT id, url FROM advertisings 
         WHERE bathrooms IS NULL AND construction_year IS NULL AND energetic_certificate IS NULL
-        ORDER BY id {order_clause}
     """
+    
+    params = []
+    if scrape_date:
+        query += " AND ScrapeDate = ?"
+        params.append(scrape_date)
+    
+    query += f" ORDER BY id {order_clause}"
 
     cursor = conn.cursor()
-    cursor.execute(query)
+    cursor.execute(query, params)
     records = cursor.fetchall()
 
     print(
-        f"🟢 Found {len(records)} records needing detail extraction. (Order: {order_by})")
+        f"🟢 Found {len(records)} records needing detail extraction. (Order: {order_by}, Date: {scrape_date if scrape_date else 'All'})")
 
     for rec in records:
         record_id, ad_url = rec[0], rec[1]
@@ -204,9 +211,9 @@ def scrape_details(order_by="bottom"):
                             energetic_certificate = p_elements[i +
                                                                1].get_text(strip=True)
 
-                    # Stop searching if both values are found
-                    if construction_year != "N/A" and energetic_certificate != "N/A":
-                        break
+                        # Stop searching if both values are found
+                        if construction_year != "N/A" and energetic_certificate != "N/A":
+                            break
             except Exception:
                 pass  # Keep default "N/A" if an error occurs
 
